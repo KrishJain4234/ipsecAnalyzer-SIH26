@@ -299,9 +299,9 @@ function loadSampleScenario(scenarioType) {
 }
 
 /**
- * Handle user file drag / upload in local memory
+ * Handle user file drag / upload and post to /analyze/protocol backend service
  */
-function handleFileSelected(event) {
+async function handleFileSelected(event) {
   const file = event.target.files[0];
   if (!file) return;
 
@@ -313,16 +313,49 @@ function handleFileSelected(event) {
   if (!resultBox || !resConsole) return;
 
   resultBox.style.display = 'block';
-  resTitle.textContent = `Capture File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-  resBadge.textContent = 'PARSING IN LOCAL CONTEXT';
+  resTitle.textContent = `Analyzing: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`;
+  resBadge.textContent = 'TRANSMITTING TO PROTOCOL ENGINE';
   resBadge.style.background = 'rgba(56, 189, 248, 0.15)';
   resBadge.style.color = '#38bdf8';
 
   resConsole.innerHTML = `
-    <span class="console-line"><span class="console-highlight">[INGESTION]</span> File loaded into browser WebAssembly memory sandbox.</span>
-    <span class="console-line"><span class="console-highlight">[ISOLATION]</span> Zero data egress. Capture buffers remain strictly in host memory.</span>
-    <span class="console-line"><span class="console-highlight">[HEADER INSPECTION]</span> Libpcap Global Header verified &bull; Magic: 0xa1b2c3d4 &bull; LinkType: Ethernet (1)</span>
-    <span class="console-line"><span class="console-highlight">[FILTER APPLIED]</span> Evaluating UDP 500/4500 (IKE) and Protocol 50/51 (ESP/AH) frames...</span>
-    <span class="console-line"><span class="console-highlight">[STANDARDS AUDIT]</span> Benchmarking negotiated proposals against NIST SP 800-77 Rev 1 specification.</span>
+    <span class="console-line"><span class="console-highlight">[INGESTION]</span> Streaming capture file to backend Protocol Identification Engine...</span>
+    <span class="console-line"><span class="console-highlight">[DISSECTION]</span> Parsing IKEv1/IKEv2 handshakes and ESP/AH encapsulation headers...</span>
   `;
+
+  try {
+    const formData = new FormData();
+    formData.append('pcap_file', file);
+
+    const response = await fetch('http://localhost:8000/analyze/protocol', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
+      throw new Error(errData.detail || `Server returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    resTitle.textContent = `Analyzed: ${file.name}`;
+    resBadge.textContent = data.ipsec_detected ? 'IPSEC PROTOCOL IDENTIFIED' : 'NO IPSEC DETECTED';
+
+    resConsole.innerHTML = `
+      <span class="console-line"><span class="console-highlight">[RESULT]</span> IPsec Detected: <strong>${data.ipsec_detected}</strong></span>
+      <span class="console-line"><span class="console-highlight">[IKE VERSION]</span> ${data.ike_version || 'None / Not Present'}</span>
+      <span class="console-line"><span class="console-highlight">[ESP DETECTED]</span> ${data.esp_detected} &bull; <span class="console-highlight">[AH DETECTED]</span> ${data.ah_detected}</span>
+      <span class="console-line"><span class="console-highlight">[ENCAPSULATION]</span> Mode: <strong>${data.mode || 'N/A'}</strong> &bull; Replay Protection: <strong>${data.replay_protection}</strong></span>
+      <span class="console-line"><span class="console-highlight">[CIPHER]</span> Encryption: <strong>${data.encryption || 'N/A'}</strong> &bull; Integrity: <strong>${data.integrity || 'N/A'}</strong></span>
+      <span class="console-line"><span class="console-highlight">[KEY EXCHANGE]</span> DH Group: <strong>${data.dh_group || 'N/A'}</strong> &bull; PFS: <strong>${data.pfs}</strong></span>
+      <span class="console-line"><span class="console-highlight">[ENDPOINTS]</span> Version: ${data.ip_version || 'N/A'} &bull; ${data.source_ip || 'N/A'} &rarr; ${data.destination_ip || 'N/A'}</span>
+      <pre style="margin-top: 10px; padding: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; color: #7dd3fc; font-size: 0.72rem; overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>
+    `;
+  } catch (err) {
+    resBadge.textContent = 'ANALYSIS NOTICE';
+    resConsole.innerHTML += `
+      <span class="console-line" style="color: #94a3b8; margin-top: 6px;"><span class="console-highlight">[ENGINE NOTICE]</span> ${err.message}</span>
+      <span class="console-line" style="color: #64748b;">(Start FastAPI backend with <code>uvicorn main:app --port 8000</code> to enable live parsing)</span>
+    `;
+  }
 }

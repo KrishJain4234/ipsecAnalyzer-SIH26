@@ -192,44 +192,107 @@ git clone https://github.com/KrishJain4234/ipsecAIanalyzer-SIH26.git
 cd ipsecAIanalyzer-SIH26
 ```
 
-### 2. Backend Setup
+### 2. Backend Setup & Run
+
 ```bash
-# Create and activate virtual environment
+# Clone the repository
+git clone https://github.com/KrishJain4234/ipsecAnalyzer-SIH26.git
+cd ipsecAnalyzer-SIH26
+
+# Create and activate a virtual environment
 python -m venv venv
 
-# Linux/macOS
+# Linux / macOS
 source venv/bin/activate
+
 # Windows
 venv\Scripts\activate
 
-# Install dependencies
-cd backend
+# Install all dependencies
 pip install -r requirements.txt
+
+# Start the backend API server
+uvicorn main:app --reload
 ```
 
-### 3. Frontend Setup
+The API will be live at `http://localhost:8000`
+Interactive Swagger docs: `http://localhost:8000/docs`
+
+### 3. Frontend (Homepage)
+
+Open `index.html` directly in a browser, **or** serve it locally:
+
 ```bash
-cd ../frontend
-npm install
+python -m http.server 4321
+# Open http://localhost:4321 in your browser
 ```
 
-### 4. Running the Application
+### 4. Run Tests
 
-**Start the Backend Server**:
 ```bash
-# From backend directory
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# From the project root
+python -m pytest tests/ -v
+# Or run the engine test directly
+$env:PYTHONPATH="."; python tests/test_protocol_engine.py
 ```
-*Backend Swagger Docs will be available at:* `http://localhost:8000/docs`
-
-**Start the Frontend Dashboard**:
-```bash
-# From frontend directory
-npm run dev
-```
-*Frontend UI will be live at:* `http://localhost:5173`
 
 ---
+
+## 🔌 API Reference — Core Feature 1
+
+### POST `/analyze/protocol`
+
+Analyzes an uploaded PCAP/PCAPNG file and returns structured IPsec protocol characteristics.
+
+**Request**
+
+| Parameter   | Type   | Description                        |
+|-------------|--------|------------------------------------|
+| `pcap_file` | file   | PCAP or PCAPNG capture file upload |
+
+Content-Type: `multipart/form-data`
+
+**Example (curl)**
+
+```bash
+curl -X POST http://localhost:8000/analyze/protocol \
+  -F "pcap_file=@capture.pcap"
+```
+
+**Example Response**
+
+```json
+{
+  "ipsec_detected": true,
+  "ike_version": "IKEv2",
+  "esp_detected": true,
+  "ah_detected": false,
+  "mode": "Tunnel",
+  "encryption": "AES-256-GCM",
+  "integrity": "AEAD",
+  "dh_group": "14",
+  "pfs": true,
+  "replay_protection": true,
+  "ip_version": "IPv4",
+  "source_ip": "192.168.1.10",
+  "destination_ip": "10.0.0.1"
+}
+```
+
+### GET `/health`
+
+Returns API server health status.
+
+```json
+{
+  "status": "operational",
+  "service": "Cyber Sentinel Protocol Identification Engine",
+  "version": "1.0.0"
+}
+```
+
+---
+
 
 ## 💻 Usage Guide
 
